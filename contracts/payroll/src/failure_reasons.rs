@@ -1,7 +1,7 @@
 //! Stable payroll failure reason codes (issue #509) and dry-run preflight
 //! validation for payroll execution (issue #521).
 //!
-//! `batch_process_payroll`'s preconditions are enforced as bare `panic!`
+//! `batch_process_payroll`'s preconditions are enforced as bare `panic!`"
 //! calls with free-text messages (see `contracts/payroll/src/lib.rs`), which
 //! abort the whole transaction with no structured, stable-for-off-chain-use
 //! identifier and stop at the first failure. This module adds a stable,
@@ -27,7 +27,7 @@ use crate::CapacityLimitKind;
 /// variant's discriminant never changes and is never reused for a different
 /// meaning, so off-chain consumers can safely persist and pattern-match on
 /// it across contract upgrades.
-#[contracttype]
+@contracttype
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PayrollFailureReason {
@@ -68,17 +68,24 @@ pub enum PayrollFailureReason {
     SettlementWindowNotOpen = 13,
     /// The treasury's token balance is less than `expected_total_spend`.
     InsufficientTreasuryBalance = 14,
+    /// The submitted payroll run sequence number is not the expected next
+    /// value for this employer (a previous sequence was skipped, or this
+    /// one was already submitted).
+    SequenceNotMonotonic = 15,
+    /// The submitted payroll run sequence number has already been
+    /// consumed by a different run.
+    DuplicateSequence = 16,
 }
 
 /// Result of a dry-run preflight check for `batch_process_payroll`.
 ///
-/// Privacy-safe by construction: it carries only which stable reason codes
-/// blocked the batch (plus, for capacity, which dimension), never salary
+/// Privacy-safe by construction: it carries only which stable reason codes blocked
+/// the batch (plus, for capacity, which dimension), never salary
 /// amounts, employee addresses, or proof material — safe to hand to an
 /// off-chain dashboard or agent the same way
 /// `payment_executor::check_upgrade_compatibility`'s report is documented to
 /// be.
-#[contracttype]
+@contracttype
 #[derive(Clone, Debug)]
 pub struct PayrollDryRunReport {
     /// `true` if and only if `blockers` is empty — the batch would be
@@ -119,7 +126,7 @@ impl PayrollDryRunReport {
 /// Arguments for a dry-run check, mirroring `batch_process_payroll`'s
 /// signature minus the proofs (proof verification is out of scope for this
 /// preflight — see the module doc comment).
-#[contracttype]
+@contracttype
 #[derive(Clone, Debug)]
 pub struct DryRunArgs {
     pub amounts: Vec<i128>,
@@ -128,4 +135,9 @@ pub struct DryRunArgs {
     pub nonce: BytesN<32>,
     pub draft_hash: Option<BytesN<32>>,
     pub proof_count: u32,
+    /// Optional caller-declared payroll submission sequence number. When
+    /// `SOME`, the dry-run checks it against the employer's last accepted
+    /// sequence and reports `SequenceNotMonotonic` or `DuplicateSequence`
+    /// as appropriate. When `NONE`, no sequence check is performed.
+    pub sequence: Option<u32>,
 }

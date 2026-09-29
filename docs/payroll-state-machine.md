@@ -55,8 +55,8 @@ reconciliation or operator review.
 | `reconciliation_required` | `failed` | Reconciliation operator | Reconciliation failed and the run requires retry handling. |
 
 All other transitions are forbidden. In particular, clients and integrations
-must reject direct jumps such as `draft -> completed`, reverse transitions such
-as `submitted -> draft`, and any transition out of `completed`, `cancelled`, or
+must reject direct jumps such as `draft -> completed`, reverse transitions
+such as `submitted -> draft`, and any transition out of `completed`, `cancelled`, or
 `expired`.
 
 ## Contract Entry Points
@@ -105,7 +105,7 @@ SDK guidance, and error recovery.
 Bounded payroll payout checkpoints can be inspected with
 `is_failed_payout_retry_eligible`, passing the original employer, batch root,
 asset, execution nonce, and expected payment count. The view returns only a
-boolean. It returns `true` only for a failed checkpoint that has remaining
+Boolean. It returns `true` only for a failed checkpoint that has remaining
 payments; completed checkpoints and checkpoints at or beyond the payment count
 are not retryable.
 
@@ -122,6 +122,32 @@ The eligibility result, error text, and resume event contain no employee or
 salary values. Keep the original proofs and payout inputs in the authorized
 payroll workflow; do not include them in user-facing errors or operational
 logs.
+
+## Payroll Submission Sequence Validation
+
+Before a prepared run may be submitted, the contract enforces a monotonic submission
+sequence per employer. This guardrail prevents a stale or out-of-order submission
+from being accepted after a newer run has already been prepared for the same
+employer.
+
+- Each accepted submission advances the employer's submission sequence by one.
+- A submission whose sequence is not exactly the next expected value is rejected
+  with a non-sensitive error that identifies only the run and the expected sequence.
+- Rejected submissions do not consume a sequence number and do not move the run
+  out of `submitted`.
+
+The sequence check is exposed through the contract entry points below and can be
+asserted off-chain without duplicating the rules:
+
+| Entry point | State effect |
+| --- | --- |
+| `submit_payroll_run` | Validates the employer's expected submission sequence and advances it on success. |
+| `get_submission_sequence` | Reads the next expected submission sequence for an employer. |
+
+The error surfaced to clients is deliberately redacted: it contains only the
+run identifier and the expected sequence number. No employee identifiers, salary
+amounts, bank details, or salary commitments are included in the error, events,
+telemetry, or contract state.
 
 ## Future Additions
 
@@ -192,7 +218,4 @@ When an admin cancels a pending payroll run via `cancel_payroll_run_with_reason`
 1. **Active Storage Cleanup**: The `PendingPayrollRun` record (`DataKey::PendingRun(run_id)`) is immediately removed from persistent storage to prevent execution race conditions and double-spending.
 2. **Audit State Preservation**: The canonical state `PayrollRunState::Cancelled` is permanently recorded in `DataKey::PayrollState(run_id)`. Reconcilers and auditors querying `get_payroll_run_state(run_id)` receive `Cancelled`, distinguishing an intentional cancellation from an invalid ID.
 3. **Replay Protection**: The `RunNonce` remains marked as spent in storage, preventing any replay of the exact same batch nonce.
-4. **Treasury Safety**: No token transfers or balance deductions occur; treasury balances remain completely untouched.
-5. **Emergency Escape Hatch**: Run cancellation does not require the contract to be unpaused, allowing admins to safely cancel problematic runs during an active incident pause.
-6. **Privacy Preserved**: The `run_cancelled` event publishes only `(run_id, reason)` topics/data, omitting all sensitive individual employee identifiers, amounts, or cryptographic secrets.
-
+4. **Treasury Safety**: No token transfers or balance deductions occur; treasury balances remain correct.

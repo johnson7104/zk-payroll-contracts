@@ -1370,6 +1370,19 @@ impl Payroll {
         // If no sequence state exists, this is the first nonce for this employer - always valid
     }
 
+    /// Validate the submission sequence of a payroll run (#payroll-submission-sequence).
+    ///
+    /// Ensures a run cannot be submitted out of order relative to the employer's
+    /// last accepted nonce sequence. This is a thin, privacy-safe guard that
+    /// only inspects the caller-supplied nonce and the stored sequence counter;
+    /// it never reads or emits salary values.
+    ///
+    /// # Panics
+    /// - If the nonce is stale or has already been used for this employer.
+    fn validate_submission_sequence(env: &Env, employer: &Address, nonce: &BytesN<32>) {
+        Self::validate_nonce_monotonicity(env, employer, nonce);
+    }
+
     /// Update the nonce sequence tracking after a successful payroll run (#362).
     ///
     /// This function should be called after a payroll run is successfully processed
