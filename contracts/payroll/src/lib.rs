@@ -978,8 +978,38 @@ pub enum DataKey {
     /// SHA-256'd XDR encoding) as already consumed, preventing replay of
     /// the exact same signed payload (#519).
     ConsumedOperatorAuth(BytesN<32>),
+    /// Organization policy version applied to this contract (#553).
+    /// Absent means no policy has been applied yet.
+    OrganizationPolicyVersion,
+    /// Record of the last applied organization policy migration (#553).
+    /// Stores the previous and new policy versions plus the migration
+    /// timestamp so integrators can audit policy transitions.
+    OrganizationPolicyMigration,
     // Future upgrade example (issue #196):
     // PayrollRunV2(u64),  // Would be added here when schema evolution is needed
+}
+
+// ── Issue #553: Contract organization policy migration validation ────────────
+
+/// Record describing the outcome of an organization policy migration.
+///
+/// A migration is only accepted when the target `new_version` is strictly
+/// greater than the currently applied `previous_version`, preventing
+/// accidental downgrades or no-op replays. The record is privacy-safe and
+/// contains no salary or employee data.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrganizationPolicyMigrationRecord {
+    /// Policy version that was active before this migration.
+    pub previous_version: u32,
+    /// Policy version that is active after this migration.
+    pub new_version: u32,
+    /// Ledger timestamp when the migration was applied.
+    pub migrated_at: u64,
+    /// Admin that applied the migration.
+    pub migrated_by: Address,
+    /// Short operator label describing the migration reason.
+    pub reason: Symbol,
 }
 
 /// Storage version state for migration checks (#360).
