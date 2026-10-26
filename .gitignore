@@ -29,8 +29,6 @@ witness.wtns
 circuits/build/
 
 # Environment / secrets
-.env
-.env.*
 .opencode
 
 # Editor and IDE files
@@ -88,3 +86,4 @@ tarpaulin-report.html
 # Temporary editor swap files
 .#*
 \#*#
+config.bat
